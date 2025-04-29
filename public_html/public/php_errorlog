@@ -1,0 +1,5 @@
+[07-Jan-2025 23:42:44 UTC] PHP Deprecated:  Using ${var} in strings is deprecated, use {$var} instead in /home/customer/www/tourtastic.net/public_html/app/Helpers/AppHelper.php on line 1174
+[30-Jan-2025 16:33:51 UTC] PHP Deprecated:  Using ${var} in strings is deprecated, use {$var} instead in /home/customer/www/tourtastic.net/public_html/app/Helpers/AppHelper.php on line 1174
+[05-Feb-2025 09:56:48 UTC] PHP Deprecated:  Using ${var} in strings is deprecated, use {$var} instead in /home/customer/www/tourtastic.net/public_html/app/Helpers/AppHelper.php on line 1174
+[27-Feb-2025 08:00:05 UTC] PHP Deprecated:  Using ${var} in strings is deprecated, use {$var} instead in /home/customer/www/tourtastic.net/public_html/app/Helpers/AppHelper.php on line 1174
+[18-Mar-2025 08:28:50 UTC] PHP Deprecated:  Using ${var} in strings is deprecated, use {$var} instead in /home/customer/www/tourtastic.net/public_html/app/Helpers/AppHelper.php on line 1174

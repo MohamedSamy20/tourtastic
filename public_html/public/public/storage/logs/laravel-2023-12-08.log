@@ -1,0 +1,20 @@
+[2023-12-08 15:20:58] production.INFO: process confirmPayment now 2023-12-08 15:12  
+[2023-12-08 15:20:58] production.INFO: array (
+  'IsSuccess' => true,
+  'Message' => NULL,
+  'OrderRef' => '7cadc6d65701f144796bae1d79fccdfe-68',
+  'TransactionNo' => '1125278897',
+  'Amount' => '1990.00',
+  'Token' => '6F76B76DC10C7B69F2EE2D1E8A18BABD',
+  'c' => '7cadc6d65701f144796bae1d79fccdfe',
+  'p' => '68',
+)  
+[2023-12-08 15:20:58] production.INFO: end Request  
+[2023-12-08 15:20:58] production.WARNING: sendStatusUpdatedEmails: Expected response code "250/251/252" but got code "550", with message "550-The mail server could not deliver mail to admin@mytravel.test.  The account
+550-or domain may not exist, they may be blacklisted, or missing the proper dns
+550 entries.".  
+[2023-12-08 15:20:58] production.INFO: array (
+  'to' => '242',
+  'message' => 'Thank you for using Tourtastic.',
+  'time' => 1702038058,
+)  

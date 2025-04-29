@@ -1,0 +1,10 @@
+[2023-12-17 15:44:05] production.INFO: array (
+  'to' => '242',
+  'message' => 'Thank you for using Tourtastic.',
+  'time' => 1702817045,
+)  
+[2023-12-17 15:45:25] production.INFO: array (
+  'to' => '813',
+  'message' => 'Thank you for using Tourtastic.',
+  'time' => 1702817125,
+)  
