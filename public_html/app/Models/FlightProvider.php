@@ -8,43 +8,29 @@ use Illuminate\Database\Eloquent\Model;
 class FlightProvider extends Model
 {
     use HasFactory;
-    
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
+
     protected $fillable = [
         'name',
         'api_email',
         'api_password',
         'agency_code',
         'api_base_url',
+        'service_class',
         'enabled',
-        'service_class'
     ];
-    
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array
-     */
+
     protected $casts = [
         'enabled' => 'boolean',
     ];
-    
+
     /**
-     * Boot the model.
+     * Scope a query to only include enabled providers.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
      */
-    protected static function boot()
+    public function scopeEnabled($query)
     {
-        parent::boot();
-        
-        // When enabling a provider, disable all others
-        static::saving(function ($model) {
-            if ($model->enabled) {
-                self::where('id', '!=', $model->id)->update(['enabled' => false]);
-            }
-        });
+        return $query->where('enabled', true);
     }
 }

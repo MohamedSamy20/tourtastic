@@ -4,242 +4,170 @@ namespace App\Services\Flights;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Config;
+use Carbon\Carbon;
 
-class SeeruFlightsService implements FlightServiceInterface
+class SeeruFlightsService
 {
     protected $client;
     protected $baseUrl;
-    protected $email;
-    protected $password;
-    protected $agencyCode;
-    
-    /**
-     * Create a new SeeruFlightsService instance.
-     */
-    public function __construct(array $config = null)
+    protected $apiKey;
+
+    public function __construct()
     {
         $this->client = new Client([
             'timeout' => 30,
-            'http_errors' => false
+            'http_errors' => false,
         ]);
-        
-        // If config is provided, use it (for dynamic provider switching)
-        // Otherwise use the config from services.php
-        if ($config) {
-            $this->baseUrl = $config['api_base_url'] ?? config('services.seeru.endpoint');
-            $this->email = $config['api_email'] ?? config('services.seeru.email');
-            $this->password = $config['api_password'] ?? config('services.seeru.password');
-            $this->agencyCode = $config['agency_code'] ?? config('services.seeru.agency_code');
-        } else {
-            $this->baseUrl = config('services.seeru.endpoint');
-            $this->email = config('services.seeru.email');
-            $this->password = config('services.seeru.password');
-            $this->agencyCode = config('services.seeru.agency_code');
+
+        $this->baseUrl = rtrim(Config::get('services.seeru.endpoint', 'https://sandbox-api.seeru.travel/v1/flights'), '/');
+        $this->apiKey = Config::get('services.seeru.api_key');
+
+        if (!$this->apiKey) {
+            Log::error('Seeru Service Error: Missing API key in config/services.php or .env');
         }
     }
-    
-    /**
-     * Get JWT authentication token
-     * 
-     * @return string|null
-     */
-    public function getAuthToken()
+
+    protected function makeRequest(string $method, string $endpoint, array $options = []): ?array
     {
-        $cacheKey = 'seeru_jwt_token_' . md5($this->email . $this->agencyCode);
-        
-        return Cache::remember($cacheKey, 3500, function () {
-            try {
-                $response = $this->client->post($this->baseUrl . '/auth/login', [
-                    'json' => [
-                        'email' => $this->email,
-                        'password' => $this->password,
-                        'agency_code' => $this->agencyCode
-                    ],
-                ]);
-                
-                if ($response->getStatusCode() === 200) {
-                    $data = json_decode($response->getBody(), true);
-                    return $data['token'] ?? null;
-                }
-                
-                Log::error('Seeru Auth Failed', [
-                    'status' => $response->getStatusCode(),
-                    'response' => (string)$response->getBody()
-                ]);
-                return null;
-                
-            } catch (\Exception $e) {
-                Log::error('Seeru Auth Exception: ' . $e->getMessage());
-                return null;
-            }
-        });
-    }
-    
-    /**
-     * Make an authenticated API request to Seeru
-     * 
-     * @param string $method HTTP method (GET, POST, etc)
-     * @param string $endpoint API endpoint
-     * @param array $params Request parameters
-     * @return array|null
-     */
-    protected function makeRequest($method, $endpoint, $params = [])
-    {
-        $token = $this->getAuthToken();
-        
-        if (!$token) {
-            Log::error('Seeru API Request Failed: No auth token');
-            return null;
-        }
-        
-        $options = [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $token,
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-            ]
+        $defaultHeaders = [
+            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
         ];
-        
-        // Add parameters based on request method
-        if ($method === 'GET') {
-            $options['query'] = $params;
-        } else {
-            $options['json'] = $params;
-        }
-        
+
+        $options['headers'] = array_merge($defaultHeaders, $options['headers'] ?? []);
+
         try {
             $response = $this->client->request($method, $this->baseUrl . $endpoint, $options);
-            
-            if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
-                return json_decode($response->getBody(), true);
+            $statusCode = $response->getStatusCode();
+            $body = json_decode($response->getBody()->getContents(), true);
+
+            if ($statusCode >= 200 && $statusCode < 300) {
+                return $body;
+            } else {
+                Log::error('Seeru API Error', [
+                    'endpoint' => $endpoint,
+                    'status' => $statusCode,
+                    'options' => $options,
+                    'response' => $body ?? (string)$response->getBody()
+                ]);
+                return null;
             }
-            
-            Log::error('Seeru API Request Failed', [
-                'endpoint' => $endpoint,
-                'status' => $response->getStatusCode(),
-                'response' => (string)$response->getBody(),
-                'params' => $params
-            ]);
-            return null;
-            
-        } catch (RequestException $e) {
-            Log::error('Seeru API Exception: ' . $e->getMessage(), [
-                'endpoint' => $endpoint,
-                'params' => $params
-            ]);
+        } catch (\Exception $e) {
+            Log::error("Seeru API Exception: {$e->getMessage()}", ['endpoint' => $endpoint]);
             return null;
         }
     }
-    
-    /**
-     * Search for flights
-     * 
-     * @param array $params Search parameters
-     * @return array|null
-     */
-    public function searchFlights($params)
+
+    public function searchFlights(array $params): ?array
     {
-        // Construct the search endpoint based on parameters
-        $trips = $params['trips'] ?? 'oneway';
+        $tripType = $params['trips'] ?? 'oneway';
         $adults = $params['adults'] ?? 1;
         $children = $params['children'] ?? 0;
         $infants = $params['infants'] ?? 0;
-        
-        $endpoint = "/search/{$trips}/{$adults}/{$children}/{$infants}";
-        
-        // Remove parameters used in the endpoint URL
-        unset($params['trips'], $params['adults'], $params['children'], $params['infants']);
-        
-        return $this->makeRequest('GET', $endpoint, $params);
+
+        $endpoint = "/search/{$tripType}/{$adults}/{$children}/{$infants}";
+        $query = $this->prepareSearchQuery($params);
+
+        return $this->makeRequest('GET', $endpoint, ['query' => $query]);
     }
-    
-    /**
-     * Get search results by search ID
-     * 
-     * @param string $searchId Search ID
-     * @return array|null
-     */
-    public function getSearchResult($searchId)
+
+    protected function prepareSearchQuery(array $params): array
     {
+        $query = [];
+
+        if (!empty($params['origin'])) $query['origin'] = $params['origin'];
+        if (!empty($params['destination'])) $query['destination'] = $params['destination'];
+        if (!empty($params['departure_date'])) $query['departure_date'] = Carbon::parse($params['departure_date'])->format('Y-m-d');
+        if (!empty($params['return_date'])) $query['return_date'] = Carbon::parse($params['return_date'])->format('Y-m-d');
+        if (!empty($params['cabin_class'])) $query['cabin_class'] = $params['cabin_class'];
+        if (isset($params['direct_flights'])) $query['direct_flights'] = filter_var($params['direct_flights'], FILTER_VALIDATE_BOOLEAN);
+
+        return array_filter($query);
+    }
+
+    public function getSearchResult(string $searchId): ?array
+    {
+        if (empty($searchId)) {
+            Log::error('Seeru getSearchResult Error: searchId is empty.');
+            return null;
+        }
+
         return $this->makeRequest('GET', "/result/{$searchId}");
     }
-    
-    /**
-     * Check fare validity before booking
-     * 
-     * @param array $params Fare parameters
-     * @return array|null
-     */
-    public function checkFare($params)
+
+    public function checkFare(array $params): ?array
     {
-        return $this->makeRequest('POST', '/booking/fare', $params);
+        if (empty($params['search_id']) || empty($params['flight_id'])) {
+            Log::error('Seeru checkFare Error: Missing search_id or flight_id.');
+            return null;
+        }
+
+        $body = [
+            'search_id' => $params['search_id'],
+            'flight_id' => $params['flight_id'],
+        ];
+
+        return $this->makeRequest('POST', '/booking/fare', ['json' => $body]);
     }
-    
-    /**
-     * Save booking (hold or ready for issuance)
-     * 
-     * @param array $params Booking parameters
-     * @return array|null
-     */
-    public function saveBooking($params)
+
+    public function saveBooking(array $params): ?array
     {
-        return $this->makeRequest('POST', '/booking/save', $params);
+        if (empty($params['search_id']) || empty($params['flight_id']) || empty($params['passengers']) || empty($params['contact'])) {
+            Log::error('Seeru saveBooking Error: Missing required parameters.');
+            return null;
+        }
+
+        $passengers = array_map(function ($pax) {
+            if (!empty($pax['date_of_birth'])) {
+                $pax['date_of_birth'] = Carbon::parse($pax['date_of_birth'])->format('Y-m-d');
+            }
+            return $pax;
+        }, $params['passengers']);
+
+        $body = [
+            'search_id' => $params['search_id'],
+            'flight_id' => $params['flight_id'],
+            'passengers' => $passengers,
+            'contact' => $params['contact'],
+        ];
+
+        return $this->makeRequest('POST', '/booking/save', ['json' => $body]);
     }
-    
-    /**
-     * Issue ticket for an order
-     * 
-     * @param string $orderId Order ID
-     * @return array|null
-     */
-    public function issueTicket($orderId)
+
+    public function issueTicket(string $orderId): ?array
     {
-        return $this->makeRequest('POST', '/order/issue', ['order_id' => $orderId]);
+        if (empty($orderId)) {
+            Log::error('Seeru issueTicket Error: Missing orderId.');
+            return null;
+        }
+
+        return $this->makeRequest('POST', '/order/issue', ['json' => ['booking_id' => $orderId]]);
     }
-    
-    /**
-     * Cancel a booking
-     * 
-     * @param string $bookingId Booking ID
-     * @return array|null
-     */
-    public function cancelBooking($bookingId)
+
+    public function cancelBooking(string $orderId): ?array
     {
-        return $this->makeRequest('POST', '/booking/cancel', ['booking_id' => $bookingId]);
+        Log::warning('Seeru cancelBooking method not implemented.');
+        return null;
     }
-    
-    /**
-     * Request refund for a ticket
-     * 
-     * @param string $ticketNumber Ticket number
-     * @return array|null
-     */
-    public function requestRefund($ticketNumber)
+
+    public function requestRefund(string $orderId, array $details): ?array
     {
-        return $this->makeRequest('POST', '/ticket/refund', ['ticket_number' => $ticketNumber]);
+        Log::warning('Seeru requestRefund method not implemented.');
+        return null;
     }
-    
-    /**
-     * Void a ticket
-     * 
-     * @param string $ticketNumber Ticket number
-     * @return array|null
-     */
-    public function voidTicket($ticketNumber)
+
+    public function voidTicket(string $orderId): ?array
     {
-        return $this->makeRequest('POST', '/ticket/void', ['ticket_number' => $ticketNumber]);
+        Log::warning('Seeru voidTicket method not implemented.');
+        return null;
     }
-    
-    /**
-     * Retrieve ticket information
-     * 
-     * @param string $ticketNumber Ticket number
-     * @return array|null
-     */
-    public function retrieveTicket($ticketNumber)
+
+    public function retrieveTicket(string $orderId): ?array
     {
-        return $this->makeRequest('GET', "/ticket/{$ticketNumber}");
+        Log::warning('Seeru retrieveTicket method not implemented.');
+        return null;
     }
 }

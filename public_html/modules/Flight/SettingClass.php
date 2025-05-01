@@ -51,6 +51,10 @@ class SettingClass extends BaseSettingsClass
                     'flight_layout_map_option',
                     'flight_icon_marker_map',
                     'flight_booking_type',
+                    'flight_api_key_name',
+                    'flight_api_key_value',
+                    'flight_api_webhook_url',
+                    'flight_api_status',
                 ],
                 'html_keys'=>[
 

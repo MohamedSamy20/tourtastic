@@ -4,152 +4,99 @@ namespace App\Services\Flights;
 
 use App\Models\FlightProvider;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Contracts\Container\BindingResolutionException;
 
-class FlightService implements FlightServiceInterface
+class FlightService
 {
-    protected $provider;
-    protected $service;
-    
-    /**
-     * Create a new FlightService instance.
-     */
+    protected $activeProviderService;
+
     public function __construct()
     {
-        $this->loadActiveProvider();
+        $this->activeProviderService = $this->resolveActiveProvider();
     }
-    
+
     /**
-     * Load the active flight provider from database
+     * Resolve the active flight provider service based on database configuration.
+     *
+     * @return object|null The instantiated service class or null if none is active/found.
      */
-    protected function loadActiveProvider()
+    protected function resolveActiveProvider()
     {
         try {
-            // Get the active provider from database
-            $this->provider = FlightProvider::where('enabled', true)->first();
-            
-            if (!$this->provider) {
-                Log::error('No active flight provider found');
-                return;
+            // Find the first enabled provider
+            $provider = FlightProvider::enabled()->first();
+
+            if (!$provider) {
+                Log::warning("No active flight provider found in the 'flight_providers' table.");
+                return null;
             }
-            
-            // Get the service class from the provider
-            $serviceClass = $this->provider->service_class;
-            
-            // Check if the service class exists
+
+            $serviceClass = $provider->service_class;
+
             if (!class_exists($serviceClass)) {
-                Log::error('Flight provider service class not found: ' . $serviceClass);
-                return;
+                Log::error("Active flight provider service class '{$serviceClass}' not found.");
+                return null;
             }
-            
-            // Create an instance of the service class with provider config
-            $this->service = new $serviceClass([
-                'api_base_url' => $this->provider->api_base_url,
-                'api_email' => $this->provider->api_email,
-                'api_password' => $this->provider->api_password,
-                'agency_code' => $this->provider->agency_code
-            ]);
-            
+
+            // Instantiate the service class using Laravel's service container
+            // This allows for dependency injection within the specific provider service
+            return app()->make($serviceClass);
+
+        } catch (BindingResolutionException $e) {
+            Log::error("Error resolving flight provider service class '{$serviceClass}': " . $e->getMessage());
+            return null;
         } catch (\Exception $e) {
-            Log::error('Error loading flight provider: ' . $e->getMessage());
+            Log::error("Error retrieving or instantiating active flight provider: " . $e->getMessage());
+            return null;
         }
     }
-    
+
     /**
-     * Search for flights
-     * 
-     * @param array $params Search parameters
-     * @return array|null
+     * Check if an active provider service is available.
+     *
+     * @return bool
      */
-    public function searchFlights($params)
+    public function hasActiveProvider(): bool
     {
-        return $this->service ? $this->service->searchFlights($params) : null;
+        return !is_null($this->activeProviderService);
     }
-    
+
     /**
-     * Get search results by search ID
-     * 
-     * @param string $searchId Search ID
-     * @return array|null
+     * Dynamically call methods on the active provider service.
+     *
+     * @param string $method
+     * @param array $parameters
+     * @return mixed
+     * @throws \BadMethodCallException If no active provider or method doesn't exist.
      */
-    public function getSearchResult($searchId)
+    public function __call(string $method, array $parameters)
     {
-        return $this->service ? $this->service->getSearchResult($searchId) : null;
+        if (!$this->hasActiveProvider()) {
+            Log::error("Attempted to call method '{$method}' on FlightService, but no active provider is configured.");
+            // Optionally, return a default error response or throw a specific exception
+            // For now, returning null to avoid breaking execution flow unexpectedly
+            return null; 
+            // throw new \BadMethodCallException("No active flight provider configured.");
+        }
+
+        if (!method_exists($this->activeProviderService, $method)) {
+            Log::error("Method '{$method}' does not exist on the active flight provider service: " . get_class($this->activeProviderService));
+            // Optionally, return a default error response or throw a specific exception
+            return null;
+            // throw new \BadMethodCallException("Method {$method} does not exist on " . get_class($this->activeProviderService));
+        }
+
+        // Forward the call to the active provider's service instance
+        return $this->activeProviderService->{$method}(...$parameters);
     }
-    
+
     /**
-     * Check fare validity before booking
-     * 
-     * @param array $params Fare parameters
-     * @return array|null
+     * Provide a way to get the underlying active service if needed, though __call is preferred.
+     *
+     * @return object|null
      */
-    public function checkFare($params)
+    public function getActiveProviderService()
     {
-        return $this->service ? $this->service->checkFare($params) : null;
-    }
-    
-    /**
-     * Save booking (hold or ready for issuance)
-     * 
-     * @param array $params Booking parameters
-     * @return array|null
-     */
-    public function saveBooking($params)
-    {
-        return $this->service ? $this->service->saveBooking($params) : null;
-    }
-    
-    /**
-     * Issue ticket for an order
-     * 
-     * @param string $orderId Order ID
-     * @return array|null
-     */
-    public function issueTicket($orderId)
-    {
-        return $this->service ? $this->service->issueTicket($orderId) : null;
-    }
-    
-    /**
-     * Cancel a booking
-     * 
-     * @param string $bookingId Booking ID
-     * @return array|null
-     */
-    public function cancelBooking($bookingId)
-    {
-        return $this->service ? $this->service->cancelBooking($bookingId) : null;
-    }
-    
-    /**
-     * Request refund for a ticket
-     * 
-     * @param string $ticketNumber Ticket number
-     * @return array|null
-     */
-    public function requestRefund($ticketNumber)
-    {
-        return $this->service ? $this->service->requestRefund($ticketNumber) : null;
-    }
-    
-    /**
-     * Void a ticket
-     * 
-     * @param string $ticketNumber Ticket number
-     * @return array|null
-     */
-    public function voidTicket($ticketNumber)
-    {
-        return $this->service ? $this->service->voidTicket($ticketNumber) : null;
-    }
-    
-    /**
-     * Retrieve ticket information
-     * 
-     * @param string $ticketNumber Ticket number
-     * @return array|null
-     */
-    public function retrieveTicket($ticketNumber)
-    {
-        return $this->service ? $this->service->retrieveTicket($ticketNumber) : null;
+        return $this->activeProviderService;
     }
 }

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 Route::group(['prefix' => 'seeru'], function() {
+    Route::get("/seeru/test-auth", [App\Http\Controllers\SeeruTestController::class, "testAuth"]);
     Route::get('/test-search', 'App\Http\Controllers\SeeruTestController@testSearch');
     Route::get('/test-search-result', 'App\Http\Controllers\SeeruTestController@testSearchResult');
     Route::get('/test-fare-check', 'App\Http\Controllers\SeeruTestController@testFareCheck');
@@ -32,6 +33,7 @@ Route::group(['prefix' => 'seeru'], function() {
     Route::post('/ticket/void', 'App\Http\Controllers\FlightController@voidTicket');
     Route::post('/ticket/exchange', 'App\Http\Controllers\FlightController@exchangeTicket');
 });
+
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();

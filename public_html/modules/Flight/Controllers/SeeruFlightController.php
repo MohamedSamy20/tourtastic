@@ -3,233 +3,239 @@ namespace Modules\Flight\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\services\Flights\SeeruFlightSearchService;
-use App\services\Flights\SeeruBookingService;
+// use App\services\Flights\SeeruFlightSearchService; // Old direct service usage
+// use App\services\Flights\SeeruBookingService; // Old direct service usage
+use App\Services\Flights\FlightService; // Use the wrapper service
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
-class SeeruFlightController extends Controller
+class SeeruFlightController extends Controller // Consider renaming or merging if this becomes the main FlightController
 {
-    protected $searchService;
-    protected $bookingService;
+    protected $flightService;
 
-    public function __construct()
+    // Inject the FlightService wrapper
+    public function __construct(FlightService $flightService)
     {
-        $this->searchService = new SeeruFlightSearchService();
-        $this->bookingService = new SeeruBookingService();
+        $this->flightService = $flightService;
     }
 
     /**
-     * Handle flight search requests with Seeru API
+     * Handle flight search requests using the active flight provider.
      */
     public function search(Request $request)
     {
-        // Build API parameters
+        if (!$this->flightService->hasActiveProvider()) {
+            return redirect()->back()->with("error", "Flight search is currently unavailable. Please contact support.");
+        }
+
+        // Build API parameters (Keep this logic or adapt if needed)
         $params = $this->buildSearchParams($request);
 
-        // Make API call
-        $searchResults = $this->searchService->searchFlights($params);
+        // Make API call via the wrapper service
+        $searchResults = $this->flightService->searchFlights($params);
         
-        if (!$searchResults || empty($searchResults['search_id'])) {
-            Log::error('Seeru API Error: Failed to get search results');
-            return redirect()->back()->with('error', 'Flight search failed. Please try again.');
+        if (!$searchResults || empty($searchResults["search_id"])) {
+            Log::error("Flight API Error: Failed to get search results", ["provider" => get_class($this->flightService->getActiveProviderService()), "params" => $params, "response" => $searchResults]);
+            return redirect()->back()->with("error", "Flight search failed. Please try again later.");
         }
 
-        // Get detailed results using search_id
-        $detailedResults = $this->searchService->getSearchResult($searchResults['search_id']);
+        // Get detailed results using search_id via the wrapper service
+        $detailedResults = $this->flightService->getSearchResult($searchResults["search_id"]);
         
-        if (!$detailedResults || empty($detailedResults['flights'])) {
-            Log::error('Seeru API Error: Failed to get detailed flight results');
-            return redirect()->back()->with('error', 'Flight search failed. Please try again.');
+        if (!$detailedResults || empty($detailedResults["flights"])) { // Adjust key based on actual API response structure
+            Log::error("Flight API Error: Failed to get detailed flight results", ["provider" => get_class($this->flightService->getActiveProviderService()), "search_id" => $searchResults["search_id"], "response" => $detailedResults]);
+            // Don't necessarily fail here, maybe the search just had no results. Check API specific error codes/messages if available.
+            // For now, proceed but log the issue.
+            // return redirect()->back()->with("error", "Could not retrieve flight details. Please try again later.");
         }
 
+        // Process the API response (Keep this logic or adapt based on API structure)
         $flights = $this->processApiResponse($detailedResults);
 
         // Store search_id in session for later use
-        session(['seeru_search_id' => $searchResults['search_id']]);
+        session(["flight_search_id" => $searchResults["search_id"]]); // Use a generic session key
 
         // Prepare data for view
         $data = [
-            'rows' => $flights,
-            'search_params' => $request->all(),
-            'seo_meta' => [
-                'title' => 'Flight Search Results',
-                'desc' => 'Find the best flight deals'
+            "rows" => $flights,
+            "search_params" => $request->all(),
+            "seo_meta" => [
+                "title" => "Flight Search Results",
+                "desc" => "Find the best flight deals"
             ]
         ];
 
-        return view('Flight::frontend.search', $data);
+        // Ensure the view path is correct for the MyTravel script structure
+        return view("Flight::frontend.search", $data);
     }
 
     /**
-     * Build search parameters for Seeru API
+     * Build search parameters for the flight API.
+     * This might need adjustments based on the specific active provider.
+     * Consider moving provider-specific logic into the service classes.
      */
-    private function buildSearchParams(Request $request)
+    private function buildSearchParams(Request $request): array
     {
+        // Basic parameters - common across providers?
         $params = [
-            'trips' => 'oneway',
-            'adults' => $request->input('adults', 1),
-            'children' => $request->input('children', 0),
-            'infants' => $request->input('infants', 0),
-            'cabin_class' => $request->input('seat_type', 'economy'),
-            'direct_flights' => false
+            "trips" => "oneway", // Default, might be overridden
+            "adults" => $request->input("adults", 1),
+            "children" => $request->input("children", 0),
+            "infants" => $request->input("infants", 0),
+            "cabin_class" => $request->input("seat_type", "economy"), // Map frontend key to API key
+            "direct_flights" => $request->boolean("direct_flights", false) // Assuming a checkbox or similar
         ];
 
         // Origin and Destination
-        if ($request->filled('from_where')) {
-            $params['origin'] = $request->input('from_where');
+        if ($request->filled("from_where")) {
+            // Assuming IATA code is expected
+            $params["origin"] = $request->input("from_where"); 
         }
-        if ($request->filled('to_where')) {
-            $params['destination'] = $request->input('to_where');
+        if ($request->filled("to_where")) {
+            // Assuming IATA code is expected
+            $params["destination"] = $request->input("to_where");
         }
 
         // Date handling
-        if ($request->filled('date')) {
-            $dates = explode(' - ', $request->input('date'));
-            $params['departure_date'] = Carbon::parse($dates[0])->format('Y-m-d');
+        if ($request->filled("date")) {
+            $dates = explode(" - ", $request->input("date"));
+            $params["departure_date"] = Carbon::parse($dates[0])->format("Y-m-d");
             
-            if (count($dates) > 1 && $params['trips'] == 'oneway') {
-                $params['trips'] = 'return';
-                $params['return_date'] = Carbon::parse($dates[1])->format('Y-m-d');
+            // Check if it's a round trip based on date range picker
+            if (count($dates) > 1) {
+                $params["trips"] = "return";
+                $params["return_date"] = Carbon::parse($dates[1])->format("Y-m-d");
             }
         }
+        
+        // Add trip type explicitly if provided (e.g., from radio buttons)
+        if ($request->filled("trip_type")) {
+             $params["trips"] = $request->input("trip_type"); // e.g., 'oneway', 'return', 'multicity'
+             if ($params["trips"] !== 'return' && isset($params["return_date"])) {
+                 unset($params["return_date"]); // Remove return date if not a round trip
+             }
+        }
+
+        // TODO: Add multi-city parameters if supported
 
         return $params;
     }
 
     /**
-     * Process Seeru API response
+     * Process flight API response into a standardized format for the view.
+     * This might need adjustments based on the specific active provider.
+     * Consider moving provider-specific logic into the service classes.
      */
-    private function processApiResponse($apiData)
+    private function processApiResponse(?array $apiData): \Illuminate\Support\Collection
     {
         $flights = collect();
 
-        if (!empty($apiData['flights'])) {
-            foreach ($apiData['flights'] as $flight) {
-                $segments = $flight['segments'][0]; // Get first segment for oneway or outbound
-                
-                $flightObj = new \stdClass();
-                $flightObj->id = $flight['flight_id'];
-                $flightObj->origin = $segments[0]['departure_airport'];
-                $flightObj->destination = $segments[count($segments) - 1]['arrival_airport'];
-                $flightObj->departure_time = Carbon::parse($segments[0]['departure_time']);
-                $flightObj->arrival_time = Carbon::parse($segments[count($segments) - 1]['arrival_time']);
-                $flightObj->price = $flight['price']['total'];
-                $flightObj->currency = $flight['price']['currency'];
-                
-                // Create airline object
-                $airlineObj = new \stdClass();
-                $airlineObj->name = $segments[0]['airline_name'];
-                $airlineObj->code = $segments[0]['airline_code'];
-                $flightObj->airline = $airlineObj;
-                
-                // Create airport objects
-                $airportFromObj = new \stdClass();
-                $airportFromObj->name = $segments[0]['departure_airport_name'];
-                $airportFromObj->code = $segments[0]['departure_airport'];
-                $flightObj->airportFrom = $airportFromObj;
-                
-                $airportToObj = new \stdClass();
-                $airportToObj->name = $segments[count($segments) - 1]['arrival_airport_name'];
-                $airportToObj->code = $segments[count($segments) - 1]['arrival_airport'];
-                $flightObj->airportTo = $airportToObj;
-                
-                $flights->push($flightObj);
+        if (empty($apiData) || empty($apiData["flights"])) { // Adjust key based on actual API response
+            return $flights;
+        }
+
+        // Assuming Seeru structure for now - needs generalization or provider-specific mapping
+        foreach ($apiData["flights"] as $flight) {
+            if (empty($flight["segments"]) || empty($flight["segments"][0])) continue; // Skip if segments are missing
+            
+            $outboundSegments = $flight["segments"][0]; // Assuming first segment array is outbound
+            $firstOutbound = $outboundSegments[0];
+            $lastOutbound = $outboundSegments[count($outboundSegments) - 1];
+
+            // Inbound segments (if available)
+            $inboundSegments = $flight["segments"][1] ?? null;
+            $firstInbound = $inboundSegments ? $inboundSegments[0] : null;
+            $lastInbound = $inboundSegments ? $inboundSegments[count($inboundSegments) - 1] : null;
+
+            $flightObj = new \stdClass();
+            $flightObj->id = $flight["flight_id"]; // Provider-specific flight identifier
+            $flightObj->price = $flight["price"]["total"] ?? null;
+            $flightObj->currency = $flight["price"]["currency"] ?? null;
+            $flightObj->stops = count($outboundSegments) - 1; // Simple stop count for outbound
+            
+            // Outbound Details
+            $flightObj->origin = $firstOutbound["departure_airport"];
+            $flightObj->destination = $lastOutbound["arrival_airport"];
+            $flightObj->departure_time = Carbon::parse($firstOutbound["departure_time"]);
+            $flightObj->arrival_time = Carbon::parse($lastOutbound["arrival_time"]);
+            $flightObj->duration = $this->calculateDuration($firstOutbound["departure_time"], $lastOutbound["arrival_time"]); // Helper needed
+
+            // Airline (use first segment's airline)
+            $airlineObj = new \stdClass();
+            $airlineObj->name = $firstOutbound["airline_name"];
+            $airlineObj->code = $firstOutbound["airline_code"];
+            // $airlineObj->image_url = ... // Get from config or DB based on code?
+            $flightObj->airline = $airlineObj;
+            
+            // Airports (use first/last segment's airports)
+            $airportFromObj = new \stdClass();
+            $airportFromObj->name = $firstOutbound["departure_airport_name"];
+            $airportFromObj->code = $firstOutbound["departure_airport"];
+            $flightObj->airportFrom = $airportFromObj;
+            
+            $airportToObj = new \stdClass();
+            $airportToObj->name = $lastOutbound["arrival_airport_name"];
+            $airportToObj->code = $lastOutbound["arrival_airport"];
+            $flightObj->airportTo = $airportToObj;
+
+            // Add Inbound Details if present
+            if ($lastInbound) {
+                 $flightObj->return_departure_time = Carbon::parse($firstInbound["departure_time"]);
+                 $flightObj->return_arrival_time = Carbon::parse($lastInbound["arrival_time"]);
+                 $flightObj->return_duration = $this->calculateDuration($firstInbound["departure_time"], $lastInbound["arrival_time"]);
+                 $flightObj->return_stops = count($inboundSegments) - 1;
             }
+            
+            // Add raw segment data if needed by the view for details display
+            $flightObj->segments = $flight["segments"]; 
+
+            $flights->push($flightObj);
         }
 
         return $flights;
     }
-
+    
     /**
-     * Handle flight booking
+     * Calculate duration between two datetime strings.
      */
-    public function booking(Request $request)
+    private function calculateDuration($start, $end): string
     {
-        $searchId = session('seeru_search_id');
-        $flightId = $request->input('flight_id');
-        
-        if (!$searchId || !$flightId) {
-            return redirect()->back()->with('error', 'Invalid booking request');
+        try {
+            $startTime = Carbon::parse($start);
+            $endTime = Carbon::parse($end);
+            return $startTime->diff($endTime)->format('%Hh %Im');
+        } catch (\Exception $e) {
+            return 'N/A';
         }
-        
-        // Check fare validity
-        $fareResult = $this->bookingService->checkFare([
-            'search_id' => $searchId,
-            'flight_id' => $flightId
-        ]);
-        
-        if (!$fareResult || !isset($fareResult['valid']) || !$fareResult['valid']) {
-            return redirect()->back()->with('error', 'Selected fare is no longer available');
-        }
-        
-        // Store booking data in session for checkout
-        session([
-            'seeru_booking_data' => [
-                'search_id' => $searchId,
-                'flight_id' => $flightId,
-                'fare_data' => $fareResult
-            ]
-        ]);
-        
-        // Redirect to passenger information page
-        return redirect()->route('flight.checkout');
     }
 
     /**
-     * Handle flight checkout
+     * Handle flight booking requests using the active flight provider.
      */
-    public function checkout(Request $request)
-    {
-        $bookingData = session('seeru_booking_data');
+    public function book(Request $request)
+        // Clear session data
+        session()->forget('seeru_search_id');
+        session()->forget('seeru_booking_data');
         
-        if (!$bookingData) {
-            return redirect()->route('flight.search')->with('error', 'No booking in progress');
-        }
-        
-        // Display checkout form
-        return view('Flight::frontend.checkout', [
-            'booking_data' => $bookingData
-        ]);
+        // Redirect to booking confirmation page
+        return redirect()->route('flight.booking.confirmation', ['booking_id' => $bookingResult['booking_id']]);
     }
 
     /**
-     * Complete booking
+     * Display booking confirmation
      */
-    public function completeBooking(Request $request)
+    public function bookingConfirmation($bookingId)
     {
-        $bookingData = session('seeru_booking_data');
+        // Here you would typically fetch booking details from your database
+        // For this example, we'll just display the booking ID
         
-        if (!$bookingData) {
-            return redirect()->route('flight.search')->with('error', 'No booking in progress');
-        }
-        
-        // Validate passenger information
-        $request->validate([
-            'passengers.*.type' => 'required',
-            'passengers.*.title' => 'required',
-            'passengers.*.first_name' => 'required',
-            'passengers.*.last_name' => 'required',
-            'passengers.*.gender' => 'required',
-            'passengers.*.date_of_birth' => 'required|date',
-            'contact.email' => 'required|email',
-            'contact.phone' => 'required',
+        return view('Flight::frontend.booking-confirmation', [
+            'booking_id' => $bookingId
         ]);
-        
-        // Prepare booking parameters
-        $bookingParams = [
-            'search_id' => $bookingData['search_id'],
-            'flight_id' => $bookingData['flight_id'],
-            'passengers' => $request->input('passengers'),
-            'contact' => $request->input('contact')
-        ];
-        
-        // Save booking
-        $bookingResult = $this->bookingService->saveBooking($bookingParams);
-        
-        if (!$bookingResult || empty($bookingResult['booking_id'])) {
-            return redirect()->back()->with('error', 'Booking failed. Please try again.');
-        }
+    }
+}
+
         
         // Clear session data
         session()->forget('seeru_search_id');

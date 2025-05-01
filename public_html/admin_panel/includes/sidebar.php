@@ -59,6 +59,24 @@
                     <span><?php echo $menuSettings; ?></span>
                     </a>
                 </li>
+                <li class="<?php if (strpos($page, 'project') !== false) {echo 'active';} else { echo 'noactive'; }?>">
+                    <a href="project.php">
+                    <i class="material-icons">folder</i>
+                    <span>Project</span>
+                    </a>
+                </li>
+                <li class="<?php if (strpos($page, 'flight_provider') !== false) {echo 'active';} else { echo 'noactive'; }?>">
+                    <a href="flight_provider.php">
+                    <i class="material-icons">flight_takeoff</i>
+                    <span>Flight Provider</span>
+                    </a>
+                </li>
+                <li class="<?php if (strpos($page, 'flight_settings') !== false) {echo 'active';} else { echo 'noactive'; }?>">
+                    <a href="flight_settings.php">
+                    <i class="material-icons">settings_applications</i>
+                    <span>Flight Settings</span>
+                    </a>
+                </li>
                 <li class="<?php if (strpos($page, 'apps.php') !== false || strpos($page, 'apps-') !== false) {echo 'active';} else { echo 'noactive'; }?>">
                     <a href="apps.php">
                     <i class="material-icons">adb</i>

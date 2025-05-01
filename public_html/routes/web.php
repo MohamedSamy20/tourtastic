@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\FlightController;
 
@@ -40,4 +42,12 @@ Route::prefix('test/seeru')->group(function () {
     Route::post('fare', [App\Http\Controllers\SeeruTestController::class, 'testFareCheck']);
     Route::post('booking', [App\Http\Controllers\SeeruTestController::class, 'testSaveBooking']);
     Route::post('issue', [App\Http\Controllers\SeeruTestController::class, 'testIssueTicket']);
+});
+
+
+Route::post('/webhook/seeru', function (Request $request) {
+    Log::info('Seeru Webhook Received:', $request->all());
+
+    // تقدر هنا تخزن البيانات أو تعالجها زي ما تحب
+    return response()->json(['status' => 'Webhook received successfully']);
 });

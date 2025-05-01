@@ -19,6 +19,10 @@ if (isset($_POST["submit"])) {
         "geolocation" => $_POST["geolocation"],
         "cache" => $_POST["cache"],
         "zoom_controls" => $_POST["zoom_controls"],
+        "flight_api_key_name" => $_POST["flight_api_key_name"],
+        "flight_api_key_value" => $_POST["flight_api_key_value"],
+        "flight_api_webhook_url" => $_POST["flight_api_webhook_url"],
+        "flight_api_status" => $_POST["flight_api_status"],
     ];
 
     $update = update("tbl_settings", $data, "WHERE id = '$ID'");
@@ -155,6 +159,33 @@ if (isset($_POST["submit"])) {
                                             <input type="text" class="form-control" name="onesignal_rest_api_key" id="onesignal_rest_api_key" value="<?php echo $settingsRow['onesignal_rest_api_key'];?>" required>
                                         </div>
                                     </div>
+                                    <div style="font-size: 16px; margin-top: 10px; margin-bottom: 10px;"><b>FLIGHT API SETTINGS</b></div>
+                                    <div class="form-group">
+                                        <div class="form-line">
+                                            <div class="font-12">API Key Name</div>
+                                            <input type="text" class="form-control" name="flight_api_key_name" id="flight_api_key_name" value="<?php echo $settingsRow['flight_api_key_name'];?>">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <div class="form-line">
+                                            <div class="font-12">API Key Value</div>
+                                            <input type="text" class="form-control" name="flight_api_key_value" id="flight_api_key_value" value="<?php echo $settingsRow['flight_api_key_value'];?>">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <div class="form-line">
+                                            <div class="font-12">Webhook URL</div>
+                                            <input type="text" class="form-control" name="flight_api_webhook_url" id="flight_api_webhook_url" value="<?php echo $settingsRow['flight_api_webhook_url'];?>">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <div class="font-12">API Status</div>
+                                        <select class="form-control show-tick" name="flight_api_status" id="flight_api_status">
+                                            <option value="Active" <?php if ($settingsRow['flight_api_status'] == 'Active') { echo 'selected="selected"'; } ?>>Active</option>
+                                            <option value="Inactive" <?php if ($settingsRow['flight_api_status'] == 'Inactive') { echo 'selected="selected"'; } ?>>Inactive</option>
+                                        </select>
+                                    </div>
+
                                     <div style="font-size: 16px; margin-top: 10px; margin-bottom: 10px;"><b>MORE APPS, USER AGENT & PRIVACY</b></div>
                                     <div class="form-group">
                                         <div class="form-line">

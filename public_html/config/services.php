@@ -46,14 +46,14 @@ return [
     ],
     
     'seeru' => [
-        'email' => env('SEERU_API_EMAIL'),
-        'password' => env('SEERU_API_PASSWORD'),
-        'agency_code' => env('SEERU_API_AGENCY_CODE'),
+        'api_key' => env('SEERU_API_KEY'),
+        'refresh_key' => env('SEERU_REFRESH_KEY'),
         'endpoint' => env('SEERU_API_ENDPOINT'),
     ],
 
     'flight' => [
-        'endpoint' => env('FLIGHT_API_ENDPOINT', 'https://sandbox-api.seeru.travel/v1/flights'),
+        'endpoint' => env('FLIGHT_API_ENDPOINT', 'https://live-api.seeru.travel/v1/flights'),
     ],
+
 
 ];
