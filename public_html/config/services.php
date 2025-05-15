@@ -52,7 +52,7 @@ return [
     ],
 
     'flight' => [
-        'endpoint' => env('FLIGHT_API_ENDPOINT', 'https://live-api.seeru.travel/v1/flights'),
+        'endpoint' => env('FLIGHT_API_ENDPOINT', 'https://sandbox-api.seeru.travel/v1/flights'),
     ],
 
 

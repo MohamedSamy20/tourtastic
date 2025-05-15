@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\FlightController;
+use App\Http\Controllers\SeeruTestController;
 
     /*
     |--------------------------------------------------------------------------
@@ -33,21 +33,51 @@ require __DIR__ . '/../modules/Flight/Routes/web.php';
 Route::get('/flight', [FlightController::class, 'search']);
 
 // Flight Routes
-Route::get('/flight/search', [FlightController::class, 'search'])->name('flight.search');
-Route::get('/flight/search-result', [FlightController::class, 'getSearchResult'])->name('flight.search-result');
+// Group for Seeru specific routes, including tests
+Route::group(['prefix' => 'seeru'], function() {
+    // --- Test Endpoints for SeeruFlightSearchService --- 
+    // Note: These endpoints directly call the service methods for testing purposes.
+    // Use GET for search and result retrieval, POST for actions like fare check, booking, ticketing.
 
-Route::prefix('test/seeru')->group(function () {
-    Route::get('search', [App\Http\Controllers\SeeruTestController::class, 'testSearch']);
-    Route::get('result', [App\Http\Controllers\SeeruTestController::class, 'testSearchResult']);
-    Route::post('fare', [App\Http\Controllers\SeeruTestController::class, 'testFareCheck']);
-    Route::post('booking', [App\Http\Controllers\SeeruTestController::class, 'testSaveBooking']);
-    Route::post('issue', [App\Http\Controllers\SeeruTestController::class, 'testIssueTicket']);
+    // Test Flight Search (GET)
+    // Example: /api/seeru/test-search?origin=DXB&destination=LHR&departure_date=2025-06-15&adults=1
+    Route::get('/search', [SeeruTestController::class, 'testSearch']);
+
+    // Test Get Search Result (GET)
+    // Example: /api/seeru/test-result/{searchId}
+    Route::get('/result/{searchId}', [SeeruTestController::class, 'testGetResult']);
+
+    // Test Fare Check (POST)
+    // Expects JSON body: { "search_id": "...", "result_id": "..." }
+    Route::post('/fare-check', [SeeruTestController::class, 'testCheckFare']);
+
+    // Test Save Booking (POST)
+    // Expects JSON body with full booking details: { "fare_id": "...", "passengers": [...], "contact": {...} }
+    Route::post('/save-booking', [SeeruTestController::class, 'testSaveBooking']);
+
+ 
+
+    // Test Get Order Details (POST)
+    Route::post('/order-details', [SeeruTestController::class, 'testOrderDetails']);
+
+    // Test Cancel Order (POST)
+    Route::post('/cancel-order', [SeeruTestController::class, 'testCancelOrder']);
+
+    // Test Issue Ticket (POST)
+    Route::post('/issue-order', [SeeruTestController::class, 'testIssueOrder']);
+
+    // Test Ticket Endpoints (POST)
+    Route::post('/ticket-details', [SeeruTestController::class, 'testTicketDetails']);
+    Route::post('/ticket-retrieve', [SeeruTestController::class, 'testTicketRetrieve']);
+    Route::post('/ticket-refund', [SeeruTestController::class, 'testTicketRefund']);
+    Route::post('/ticket-void', [SeeruTestController::class, 'testTicketVoid']);
+    Route::post('/ticket-exchange', [SeeruTestController::class, 'testTicketExchange']);
 });
 
 
 Route::post('/webhook/seeru', function (Request $request) {
     Log::info('Seeru Webhook Received:', $request->all());
 
-    // تقدر هنا تخزن البيانات أو تعالجها زي ما تحب
+    // Here, you can store or process data as you like.
     return response()->json(['status' => 'Webhook received successfully']);
 });
