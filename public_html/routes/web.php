@@ -3,7 +3,8 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\SeeruTestController;
+use App\Http\Controllers\FlightController; // Changed to FlightController
+// use App\Http\Controllers\SeeruTestController; // Commented out or remove if not used elsewhere in this file
 
     /*
     |--------------------------------------------------------------------------
@@ -15,69 +16,54 @@ use App\Http\Controllers\SeeruTestController;
     | contains the "web" middleware group. Now create something great!
     |
     */
-Route::get('/intro','LandingpageController@index');
-Route::get('/', 'HomeController@index');
-Route::get('/home', 'HomeController@index')->name('home');
-Route::post('/install/check-db', 'HomeController@checkConnectDatabase');
+Route::get("/intro", "LandingpageController@index");
+Route::get("/", "HomeController@index");
+Route::get("/home", "HomeController@index")->name("home");
+Route::post("/install/check-db", "HomeController@checkConnectDatabase");
 
 // Social Login
-Route::get('social-login/{provider}', 'Auth\LoginController@socialLogin');
-Route::get('social-callback/{provider}', 'Auth\LoginController@socialCallBack');
+Route::get("social-login/{provider}", "Auth\LoginController@socialLogin");
+Route::get("social-callback/{provider}", "Auth\LoginController@socialCallBack");
 
 // Logs
-Route::get(config('admin.admin_route_prefix').'/logs', '\Rap2hpoutre\LaravelLogViewer\LogViewerController@index')->middleware(['auth', 'dashboard','system_log_view'])->name('admin.logs');
+Route::get(config("admin.admin_route_prefix")."/logs", "\Rap2hpoutre\LaravelLogViewer\LogViewerController@index")->middleware(["auth", "dashboard","system_log_view"])->name("admin.logs");
 
-Route::get('/install','InstallerController@redirectToRequirement')->name('LaravelInstaller::welcome');
-Route::get('/install/environment','InstallerController@redirectToWizard')->name('LaravelInstaller::environment');
-require __DIR__ . '/../modules/Flight/Routes/web.php';
-Route::get('/flight', [FlightController::class, 'search']);
+Route::get("/install", "InstallerController@redirectToRequirement")->name("LaravelInstaller::welcome");
+Route::get("/install/environment", "InstallerController@redirectToWizard")->name("LaravelInstaller::environment");
+require __DIR__ . "/../modules/Flight/Routes/web.php"; // This might contain other flight routes
 
-// Flight Routes
-// Group for Seeru specific routes, including tests
-Route::group(['prefix' => 'seeru'], function() {
-    // --- Test Endpoints for SeeruFlightSearchService --- 
-    // Note: These endpoints directly call the service methods for testing purposes.
-    // Use GET for search and result retrieval, POST for actions like fare check, booking, ticketing.
+// Dedicated flights page route
+Route::get('/flights', [FlightController::class, 'showSearchForm'])->name('flights.index');
 
-    // Test Flight Search (GET)
-    // Example: /api/seeru/test-search?origin=DXB&destination=LHR&departure_date=2025-06-15&adults=1
-    Route::get('/search', [SeeruTestController::class, 'testSearch']);
+// Production Flight API-like Routes (used by AJAX)
+Route::group(["prefix" => "flight", "as" => "flight."], function () {
+    // Flight Search & Results
+    Route::get("/search", [FlightController::class, "search"])->name("search"); // Called by AJAX
+    Route::get("/results/{searchId}", [FlightController::class, "getResult"])->name("results"); // Called by AJAX
 
-    // Test Get Search Result (GET)
-    // Example: /api/seeru/test-result/{searchId}
-    Route::get('/result/{searchId}', [SeeruTestController::class, 'testGetResult']);
+    // Fare & Booking Process
+    Route::post("/fare-check", [FlightController::class, "checkFare"])->name("fare.check"); // Called by AJAX
+    Route::post("/book", [FlightController::class, "saveBooking"])->name("book.save"); // Called by AJAX
 
-    // Test Fare Check (POST)
-    // Expects JSON body: { "search_id": "...", "result_id": "..." }
-    Route::post('/fare-check', [SeeruTestController::class, 'testCheckFare']);
+    // Order Management
+    Route::post("/order/details", [FlightController::class, "orderDetails"])->name("order.details"); // Called by AJAX
+    Route::post("/order/cancel", [FlightController::class, "cancelOrder"])->name("order.cancel"); // Called by AJAX
+    Route::post("/order/issue", [FlightController::class, "issueOrder"])->name("order.issue"); // Called by AJAX
 
-    // Test Save Booking (POST)
-    // Expects JSON body with full booking details: { "fare_id": "...", "passengers": [...], "contact": {...} }
-    Route::post('/save-booking', [SeeruTestController::class, 'testSaveBooking']);
-
- 
-
-    // Test Get Order Details (POST)
-    Route::post('/order-details', [SeeruTestController::class, 'testOrderDetails']);
-
-    // Test Cancel Order (POST)
-    Route::post('/cancel-order', [SeeruTestController::class, 'testCancelOrder']);
-
-    // Test Issue Ticket (POST)
-    Route::post('/issue-order', [SeeruTestController::class, 'testIssueOrder']);
-
-    // Test Ticket Endpoints (POST)
-    Route::post('/ticket-details', [SeeruTestController::class, 'testTicketDetails']);
-    Route::post('/ticket-retrieve', [SeeruTestController::class, 'testTicketRetrieve']);
-    Route::post('/ticket-refund', [SeeruTestController::class, 'testTicketRefund']);
-    Route::post('/ticket-void', [SeeruTestController::class, 'testTicketVoid']);
-    Route::post('/ticket-exchange', [SeeruTestController::class, 'testTicketExchange']);
+    // Ticket Management
+    Route::post("/ticket/details", [FlightController::class, "ticketDetails"])->name("ticket.details"); // Called by AJAX
+    Route::post("/ticket/retrieve", [FlightController::class, "ticketRetrieve"])->name("ticket.retrieve"); // Called by AJAX
+    Route::post("/ticket/refund", [FlightController::class, "ticketRefund"])->name("ticket.refund"); // Called by AJAX
+    Route::post("/ticket/void", [FlightController::class, "ticketVoid"])->name("ticket.void"); // Called by AJAX
+    Route::post("/ticket/exchange", [FlightController::class, "ticketExchange"])->name("ticket.exchange"); // Called by AJAX
 });
 
 
-Route::post('/webhook/seeru', function (Request $request) {
-    Log::info('Seeru Webhook Received:', $request->all());
+Route::post("/webhook/seeru", function (Request $request) {
+    Log::info("Seeru Webhook Received:", $request->all());
 
     // Here, you can store or process data as you like.
-    return response()->json(['status' => 'Webhook received successfully']);
+    return response()->json(["status" => "Webhook received successfully"]);
 });
+
+
