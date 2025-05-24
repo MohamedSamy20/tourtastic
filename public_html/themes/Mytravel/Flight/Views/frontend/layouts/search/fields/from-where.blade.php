@@ -1,1 +1,0 @@
-@include('Flight::frontend.layouts.search.fields.location',['inputName'=>'from_where'])

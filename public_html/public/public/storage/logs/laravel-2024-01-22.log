@@ -1,6 +1,0 @@
-[2024-01-22 12:17:44] production.INFO: process confirmPayment now 2024-01-22 12:01  
-[2024-01-22 12:17:44] production.INFO: array (
-  'c' => '3c7958f9ae2553799c0c05ea31f179e7',
-  'amp;p' => '94',
-)  
-[2024-01-22 12:17:44] production.INFO: https://tour-tastic.com/booking/confirm/Fatora?amp%3Bp=94&c=3c7958f9ae2553799c0c05ea31f179e7  
